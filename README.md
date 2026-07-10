@@ -1,6 +1,9 @@
 # kotoba-lang/netsync
 
-Kotoba package for `kotoba.netsync`.
+**SSoT for `kami.netsync`** — EDN replication schema, snapshot/interp, and
+client-side prediction helpers (`.cljc`).
+
+`kotoba.netsync` is a thin facade. See ADR-2607102200 addendum 7.
 
 ## Test
 

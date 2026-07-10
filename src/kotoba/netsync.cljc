@@ -1,91 +1,12 @@
 (ns kotoba.netsync
-  "hiccup for replication — what crosses the wire, described as EDN. A schema names the
-   synced components, their fields, authority, and interpolation. The wire payload is
-   derived from the schema, not hand-coded; store the schema as datoms, fork it, retune
-   bandwidth without touching transport code.
+  "Facade re-exporting `kami.netsync` (SSoT in this package, ADR-2607102200 addendum 7)."
+  (:require [kami.netsync :as impl]))
 
-     {:components {:transform {:fields [:x :y :z] :authority :server :interp :lerp}
-                   :health    {:fields [:hp]      :authority :server :interp :snap}}}
-
-   Pure + cross-platform (.cljc): `snapshot` extracts the wire payload; `apply-snapshot`
-   merges a received one; `interp` blends toward a target per each component's :interp.
-   The same EDN drives any transport (WebRTC/WebSocket here-or-later).")
-
-(def default-schema
-  {:components {:transform {:fields [:x :y :z]  :authority :server :interp :lerp}
-                :facing    {:fields [:rx :ry]   :authority :server :interp :lerp}
-                :health    {:fields [:hp]       :authority :server :interp :snap}}
-   ;; Client-side prediction (Co-Scientist iter-02 predicted-thirdperson-squad). `:predict`
-   ;; names the components the local player predicts ahead of the server; `:prediction` tunes
-   ;; the rollback buffer and the snap threshold. Pure feel-as-data — fork to retune.
-   :predict #{:transform}
-   :prediction {:buffer 64 :snap-threshold 0.5}})
-
-(defn synced-fields
-  "All fields the schema replicates, across components."
-  [schema]
-  (vec (mapcat (comp :fields val) (:components schema))))
-
-(defn snapshot
-  "The wire payload for an entity: only the schema's synced fields."
-  [schema entity]
-  (select-keys entity (synced-fields schema)))
-
-(defn apply-snapshot
-  "Merge a received snapshot into an entity (schema fields only)."
-  [schema entity snap]
-  (merge entity (select-keys snap (synced-fields schema))))
-
-(defn interp
-  "Blend an entity toward `target` by t∈[0,1] using each component's :interp — :lerp
-   numerically tweens fields, anything else snaps. Pure."
-  [schema entity target t]
-  (reduce-kv
-    (fn [e _ {:keys [fields interp]}]
-      (reduce (fn [e f]
-                (let [a (get e f) b (get target f)]
-                  (cond
-                    (not (contains? target f)) e
-                    (and (= interp :lerp) (number? a) (number? b)) (assoc e f (+ a (* (- b a) t)))
-                    :else (assoc e f b))))
-              e fields))
-    entity (:components schema)))
-
-;; ── client-side prediction + remote interpolation (pure, cross-platform) ──
-
-(defn- sqrt [x] #?(:clj (Math/sqrt x) :cljs (js/Math.sqrt x)))
-
-(defn- dist
-  "Euclidean distance between two entities over a field set (missing field = 0)."
-  [fields a b]
-  (sqrt (reduce (fn [s f] (let [d (- (get a f 0) (get b f 0))] (+ s (* d d)))) 0 fields)))
-
-(defn pred-record
-  "Append a local input to the pending (unconfirmed) buffer, trimmed to the schema's
-   :prediction :buffer length. Pure — `pending` is a vector you thread each frame."
-  [schema pending input]
-  (let [cap (get-in schema [:prediction :buffer] 64)]
-    (vec (take-last cap (conj (vec pending) input)))))
-
-(defn pred-reconcile
-  "Client reconciliation against an authoritative snapshot (ported from prediction.rs).
-   `local` is the client-predicted entity; `authoritative` is the server-confirmed snapshot;
-   `pending` are the inputs not yet acked; `step` is a pure (entity input) -> entity.
-
-   Replays `pending` from the authoritative base. If that reconciled position differs from the
-   local prediction by more than the schema's :snap-threshold, SNAP to it (a visible
-   correction); otherwise the prediction was right — keep `local` (no rubber-banding). Pure."
-  [schema local authoritative pending step]
-  (let [threshold (get-in schema [:prediction :snap-threshold] 0.5)
-        fields    (get-in schema [:components :transform :fields] [:x :y :z])
-        base      (apply-snapshot schema local authoritative)
-        replayed  (reduce step base pending)]
-    (if (> (dist fields local replayed) threshold)
-      replayed
-      local)))
-
-(defn remote-interp
-  "Interpolate a REMOTE entity between two buffered snapshots by `alpha`∈[0,1] — `prev` at 0,
-   `next` at 1. Smooths other players' motion between sparse server updates. Pure."
-  [schema prev next alpha]
-  (interp schema prev next alpha))
+(def default-schema   impl/default-schema)
+(def synced-fields    impl/synced-fields)
+(def snapshot         impl/snapshot)
+(def apply-snapshot   impl/apply-snapshot)
+(def interp           impl/interp)
+(def pred-record      impl/pred-record)
+(def pred-reconcile   impl/pred-reconcile)
+(def remote-interp    impl/remote-interp)
