@@ -3,6 +3,8 @@
   (:require [kami.netsync :as impl]))
 
 (def default-schema   impl/default-schema)
+(def fps-schema       impl/fps-schema)
+(def fighting-schema  impl/fighting-schema)
 (def synced-fields    impl/synced-fields)
 (def snapshot         impl/snapshot)
 (def apply-snapshot   impl/apply-snapshot)
