@@ -9,7 +9,13 @@
 
    Pure + cross-platform (.cljc): `snapshot` extracts the wire payload; `apply-snapshot`
    merges a received one; `interp` blends toward a target per each component's :interp.
-   The same EDN drives any transport (WebRTC/WebSocket here-or-later).")
+   The same EDN drives any transport (WebRTC/WebSocket here-or-later).
+
+   Genre lag compensation lives in sibling namespaces, required only by the
+   games that need them:
+
+   - `kami.netsync.fps` — hitscan rewind (the shot; movement stays here)
+   - `kami.netsync.fighting` — rollback / delay-based lockstep")
 
 (def default-schema
   {:components {:transform {:fields [:x :y :z]  :authority :server :interp :lerp}
@@ -20,6 +26,29 @@
    ;; the rollback buffer and the snap threshold. Pure feel-as-data — fork to retune.
    :predict #{:transform}
    :prediction {:buffer 64 :snap-threshold 0.5}})
+
+(def fps-schema
+  "PALISADE / nightglass-strike. Shooter predicts transform+facing; HP snaps
+   from the authority; `:fps` is the rewind policy `kami.netsync.fps` consumes."
+  {:components {:transform {:fields [:x :y :z] :authority :server :interp :lerp}
+                :facing    {:fields [:rx :ry]  :authority :server :interp :lerp}
+                :health    {:fields [:hp]      :authority :server :interp :snap}}
+   :predict #{:transform :facing}
+   :prediction {:buffer 64 :snap-threshold 0.5}
+   :genre :fps
+   :fps {:history 128 :max-rewind 20 :hit-radius 0.55 :origin-slop 2.0}})
+
+(def fighting-schema
+  "Network 2P fighting. Authority is the deterministic sim every peer runs,
+   not a damage-deciding client. Rollback window is the rewrite horizon."
+  {:components {:transform {:fields [:x :y] :authority :sim :interp :snap}
+                :health    {:fields [:hp]   :authority :sim :interp :snap}
+                :fsm       {:fields [:st]   :authority :sim :interp :snap}}
+   :predict #{}
+   :genre :fighting
+   :fighting {:mode :rollback :players #{:p1 :p2}
+              :rollback-window 8 :save-cap 16
+              :empty-input {:dx 0 :attack false}}})
 
 (defn synced-fields
   "All fields the schema replicates, across components."

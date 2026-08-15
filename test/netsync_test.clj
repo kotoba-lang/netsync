@@ -16,3 +16,9 @@
         local {:x 3}
         auth {:x 0}]
     (is (= local (net/pred-reconcile net/default-schema local auth pending step)))))
+
+(deftest genre-schemas-are-data
+  (is (= :fps (:genre net/fps-schema)))
+  (is (= :fighting (:genre net/fighting-schema)))
+  (is (= 20 (get-in net/fps-schema [:fps :max-rewind])))
+  (is (= :rollback (get-in net/fighting-schema [:fighting :mode]))))
