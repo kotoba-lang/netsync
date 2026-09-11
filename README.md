@@ -28,5 +28,5 @@ own stream and both run the same `step`.
 ## Test
 
 ```sh
-clojure -M:test
+kbb -M:test
 ```
